@@ -1,0 +1,50 @@
+spring:
+  application:
+    name: seekora
+  datasource:
+    url: jdbc:h2:file:./data/seekora;AUTO_SERVER=TRUE
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: ${DDL_AUTO:update}
+    open-in-view: false
+  h2:
+    console:
+      enabled: true
+  jackson:
+    default-property-inclusion: non_null
+  web:
+    resources:
+      cache:
+        cachecontrol:
+          no-cache: true   # always revalidate the UI files so an updated build is picked up immediately
+server:
+  port: ${PORT:8080}
+  shutdown: graceful
+  forward-headers-strategy: framework
+  servlet:
+    session:
+      cookie:
+        http-only: true
+        same-site: lax
+        secure: ${SEEKORA_COOKIE_SECURE:false}   # set true when served over HTTPS only (ngrok / reverse proxy)
+seekora:
+  ai:
+    # Secrets live only on the server. Never put a real key in this file; use the environment variable.
+    api-key: ${SEEKORA_AI_API_KEY:}
+    base-url: ${SEEKORA_AI_BASE_URL:https://api.openai.com/v1}
+    model: ${SEEKORA_AI_MODEL:gpt-4o-mini}
+    timeout-seconds: ${SEEKORA_AI_TIMEOUT_SECONDS:60}
+    temperature: ${SEEKORA_AI_TEMPERATURE:0.2}   # leave empty to omit (some newer models reject it)
+    required: ${SEEKORA_AI_REQUIRED:false}       # true = return a configuration error instead of the extractive fallback
+  research:
+    search-url: ${SEEKORA_SEARCH_URL:https://html.duckduckgo.com/html/}
+    wikipedia-api-url: ${SEEKORA_WIKIPEDIA_API_URL:https://en.wikipedia.org/w/api.php}
+  cors:
+    allowed-origins: ${SEEKORA_CORS_ORIGINS:}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

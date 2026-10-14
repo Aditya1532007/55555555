@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Seekora AI — Search Smarter, Learn Faster</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>">
+<link rel="stylesheet" href="/css/seekora.css">
+</head>
+<body>
+
+<div id="preloader">
+  <div class="loader-logo">
+     🤖
+  </div>
+  <div class="loader-bar"><div id="loaderFill"></div></div>
+  <div class="loader-text">Initializing AI Engine…</div>
+</div>
+
+<div id="cursor"></div><div id="cursorRing"></div>
+<div id="progressBar"></div>
+<canvas id="particles"></canvas>
+<canvas id="matrixCanvas"></canvas>
+<div class="grid-overlay"></div>
+<div class="glow-orb orb1"></div><div class="glow-orb orb2"></div>
+
+<!-- NAVBAR -->
+<nav id="navbar">
+  <div class="logo"><div class="logo-icon">
+  🤖
+  </div>Seekora<span class="grad-text">AI</span></div>
+  <ul class="nav-links" id="navLinks">
+    <li><a href="#features" class="spy">Features</a></li>
+    <li><a href="#how" class="spy">How It Works</a></li>
+    <li><a href="#stack" class="spy">Tech</a></li>
+    <li><a href="#pricing" class="spy">Pricing</a></li>
+    <li><a href="#roadmap" class="spy">Roadmap</a></li>
+    <li><a href="#faq" class="spy">FAQ</a></li>
+  </ul>
+  <div class="nav-cta" style="display:flex;gap:12px;align-items:center">
+    <span class="kbd-hint"><kbd>Ctrl</kbd>+<kbd>K</kbd></span>
+    <button class="icon-btn" data-act="toggleTheme" title="Toggle theme" id="themeBtn">🌙</button>
+    <span id="accountGreeting" hidden style="color:var(--muted);font-size:.86rem"></span>
+    <button class="btn magnetic" id="accountButton" data-act="openAuth" data-arg="signup">Get Started</button>
+    <button class="hamburger" data-act="toggleNav">☰</button>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section id="hero">
+  <div>
+    <span class="tag reveal">✨ Search Smarter · Learn Faster</span>
+    <h1 class="reveal d1">One <span class="grad-text">AI-Powered Platform</span> for<br>
+      <span class="typed-wrap"><span id="typed"></span><span class="caret">&nbsp;</span></span>
+    </h1>
+    <p class="lead reveal d2">A smart, reliable, all-in-one platform that empowers students, researchers, and professionals to find, learn, and grow — instantly.</p>
+    <div class="hero-btns reveal d3">
+      <button class="btn magnetic" data-act="goto" data-arg="#demo">Try Live Demo ⚡</button>
+      <button class="btn btn-ghost magnetic" data-act="goto" data-arg="#demo">Open the AI app ↗</button>
+    </div>
+  </div>
+  <div class="hero-visual reveal d2">
+    <div class="float-badge fb1">⚡ Ask in plain language</div>
+    <div class="terminal" id="terminal">
+      <div class="term-head"><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+        <span class="term-title">seekora — example workflow</span></div>
+      <div class="term-body" id="termBody"></div>
+    </div>
+    <div class="float-badge fb2">✅ Chat & text summaries</div>
+  </div>
+</section>
+
+<!-- MARQUEE -->
+<div class="marquee"><div class="marquee-track" id="mq1"></div><div class="marquee-track" id="mq2"></div></div>
+
+<!-- LIVE DEMO -->
+<section id="demo">
+  <span class="tag reveal">Live Demo</span>
+  <h2 class="section-title reveal">Ask <span class="grad-text">Anything</span></h2>
+  <p class="section-sub reveal">Ask questions, summarize pasted text, and keep your conversation history.</p>
+  <div class="search-box reveal">
+    <input type="text" id="searchInput" placeholder="Ask anything… try 'quantum computing' or 'photosynthesis'" data-enter="demoSearch">
+    <button class="btn btn-ghost mic-btn" id="micBtn" data-act="voiceSearch" title="Voice search">🎙️</button>
+    <button class="btn magnetic" data-act="demoSearch">Search</button>
+  </div>
+  <div class="suggestions reveal">
+    <div class="sug" data-act="askSug" data-arg="What is quantum computing?">Quantum computing</div>
+    <div class="sug" data-act="askSug" data-arg="Explain photosynthesis">Photosynthesis</div>
+    <div class="sug" data-act="askSug" data-arg="How does AI work?">How AI works</div>
+    <div class="sug" data-act="askSug" data-arg="What is climate change?">Climate change</div>
+  </div>
+  <div style="max-width:820px;margin:24px auto;text-align:left" class="reveal"><label for="summaryInput" style="display:block;margin-bottom:10px;color:var(--muted)">Or paste text to summarize</label><textarea id="summaryInput" placeholder="Paste an article, notes, or any text…" style="width:100%;min-height:150px;padding:16px;border-radius:16px;border:1px solid var(--border);background:var(--card);color:var(--text);font:inherit;resize:vertical"></textarea><button class="btn magnetic" style="margin-top:12px" data-act="summarizeText">Summarize text</button></div>
+  <div class="search-result" id="searchResult">
+    <h3 style="font-size:1rem">💡 AI Summary</h3>
+    <p id="resultText" style="color:var(--muted);font-size:.93rem;margin-top:10px"></p>
+    <div class="src" id="sourceLinks">Web source links will appear here after a search.</div>
+  </div>
+  <div class="stats">
+    <div class="stat reveal"><b class="counter" data-target="1">0</b><span>AI assistant</span></div>
+    <div class="stat reveal d1"><b class="counter" data-target="2">0</b><span>AI tools</span></div>
+    <div class="stat reveal d2"><b class="counter" data-target="1">0</b><span>Conversation history</span></div>
+    <div class="stat reveal d3"><b class="counter" data-target="5">0</b><span>AI modes</span></div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section id="features">
+  <span class="tag reveal">Value Propositions</span>
+  <h2 class="section-title reveal">Why Choose <span class="grad-text">Seekora AI?</span></h2>
+  <p class="section-sub reveal">A focused workspace for asking questions, summarizing text, and continuing your conversations.</p>
+  <div class="grid grid-3">
+    <div class="card reveal"><div class="shine"></div><div class="icon">🌐</div><h3>Ask in Plain Language</h3><p>Ask everyday questions and get clear answers from the AI model configured for Seekora.</p></div>
+    <div class="card reveal d1"><div class="shine"></div><div class="icon">📝</div><h3>Text Summaries</h3><p>Paste long notes or articles and get a concise extractive summary generated locally.</p></div>
+    <div class="card reveal d2"><div class="shine"></div><div class="icon">💬</div><h3>Conversation History</h3><p>Continue earlier chats. Your conversation history is saved by the Seekora backend.</p></div>
+    <div class="card reveal"><div class="shine"></div><div class="icon">🖼️</div><h3>More Ways to Explore</h3><p>Image and webpage analysis are ideas for future Seekora features.</p></div>
+    <div class="card reveal d1"><div class="shine"></div><div class="icon">⚡</div><h3>Save Time & Effort</h3><p>Turn longer material into a concise summary and keep your questions in one conversation.</p></div>
+    <div class="card reveal d2"><div class="shine"></div><div class="icon">🎯</div><h3>Simple to Use</h3><p>Ask a question in everyday language, then follow up in the same conversation.</p></div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section id="how">
+  <span class="tag reveal">The Process</span>
+  <h2 class="section-title reveal">How It <span class="grad-text">Works</span></h2>
+  <p class="section-sub reveal">Ask a question, paste text to summarize, and continue the conversation in the chat widget.</p>
+  <div class="steps">
+    <div class="step reveal"><h3>Ask Your Question</h3><p>Type or speak any query — from homework to deep research.</p></div>
+    <div class="step reveal d1"><h3>Read Relevant Pages</h3><p>Seekora opens a few public results and extracts readable page text.</p></div>
+    <div class="step reveal d2"><h3>Summarize Your Text</h3><p>Paste notes or an article and request a concise summary.</p></div>
+    <div class="step reveal d3"><h3>Keep Your History</h3><p>Sign in to save searches and manage your conversation history.</p></div>
+  </div>
+</section>
+
+<!-- AUDIENCE -->
+<section id="audience">
+  <span class="tag reveal">Customer Segments</span>
+  <h2 class="section-title reveal">Built for <span class="grad-text">Everyone</span></h2>
+  <p class="section-sub reveal">From classrooms to boardrooms — one platform serving every kind of learner.</p>
+  <div class="chips reveal">
+    <div class="chip">🎓 School Students</div><div class="chip">👨‍🎓 College Students</div>
+    <div class="chip">👩‍🏫 Teachers & Educators</div><div class="chip">🔬 Researchers</div>
+    <div class="chip">💼 Professionals</div><div class="chip">🌍 General Internet Users</div>
+  </div>
+</section>
+
+<!-- TECH STACK -->
+<section id="stack">
+  <span class="tag reveal">Under the Hood</span>
+  <h2 class="section-title reveal">Our <span class="grad-text">Technology Stack</span></h2>
+  <p class="section-sub reveal">Built with Java, Spring Boot, H2, and an OpenAI-compatible AI API.</p>
+  <div class="stack-grid">
+    <div class="stack-item reveal"><div class="si">⚛️</div><b>HTML · CSS · JS</b><small>Frontend</small></div>
+    <div class="stack-item reveal d1"><div class="si">☕</div><b>Java · Spring Boot</b><small>Backend</small></div>
+    <div class="stack-item reveal d2"><div class="si">🗄️</div><b>H2</b><small>Database</small></div>
+    <div class="stack-item reveal d3"><div class="si">🧠</div><b>Local summary</b><small>No model API</small></div>
+    <div class="stack-item reveal"><div class="si">🔌</div><b>REST API · JSON</b><small>Integration</small></div>
+    <div class="stack-item reveal d1"><div class="si">🌐</div><b>REST · JSON</b><small>API</small></div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section id="pricing">
+  <span class="tag reveal">Available Now</span>
+  <h2 class="section-title reveal">Explore Seekora <span class="grad-text">AI Tools</span></h2>
+  <p class="section-sub reveal">Use the AI tools currently available in this Seekora build.</p>
+  <div class="pricing-grid">
+    <div class="price-card reveal">
+      <h3>Ask Seekora</h3>
+      <div class="price">Chat<small> with AI</small></div>
+      <ul><li>Ask questions in plain language</li><li>Continue a conversation</li>
+        <li>Keep conversation history</li><li>Use the chat widget</li></ul>
+      <button class="btn btn-ghost magnetic" style="width:100%" data-act="goto" data-arg="#demo">Try the assistant</button>
+    </div>
+    <div class="price-card featured reveal d1">
+      <span class="badge">Available now</span>
+      <h3>Summarize</h3>
+      <div class="price">Text<small> with AI</small></div>
+      <ul><li>Paste notes or an article</li><li>Request a concise summary</li>
+        <li>Extracts useful sentences locally</li><li>Generated without a model API</li>
+        <li>No payment or account required</li><li>REST API available</li></ul>
+      <button class="btn magnetic" style="width:100%" data-act="goto" data-arg="#demo">Summarize text</button>
+    </div>
+  </div>
+</section>
+
+<!-- TESTIMONIALS -->
+<section id="testimonials">
+  <span class="tag reveal">Made for learning</span>
+  <h2 class="section-title reveal">One place to <span class="grad-text">explore ideas</span></h2>
+  <p class="section-sub reveal">Use Seekora to ask questions, follow sources, and keep track of your conversations.</p>
+  <div class="testi-grid">
+    <div class="testi reveal"><div class="stars">01</div><p>Ask a general question and get a direct answer from the AI service.</p>
+      <div class="testi-user"><div class="avatar">✨</div><div><b>Ask</b><small>Explore a topic</small></div></div></div>
+    <div class="testi reveal d1"><div class="stars">02</div><p>Use web research or analyze a webpage or image when you need more context.</p>
+      <div class="testi-user"><div class="avatar">🔎</div><div><b>Research</b><small>Go deeper</small></div></div></div>
+    <div class="testi reveal d2"><div class="stars">03</div><p>Sign in to save your conversations and continue them later.</p>
+      <div class="testi-user"><div class="avatar">💬</div><div><b>Continue</b><small>Keep your history</small></div></div></div>
+  </div>
+</section>
+
+<!-- ROADMAP -->
+<section id="roadmap">
+  <span class="tag reveal">Future Scope</span>
+  <h2 class="section-title reveal">Where We're <span class="grad-text">Headed</span></h2>
+  <p class="section-sub reveal">Our vision for the future of intelligent learning.</p>
+  <div class="timeline">
+    <div class="tl-item reveal"><h3>🎙️ Voice Search & AI Chat Assistant</h3><p>Talk to the platform naturally — try the mic and chat widget on this page right now!</p></div>
+    <div class="tl-item reveal"><h3>📄 More Document Formats</h3><p>Additional document analysis formats may be added in a future release.</p></div>
+    <div class="tl-item reveal"><h3>📱 Mobile Application</h3><p>Native iOS and Android apps for learning on the go.</p></div>
+    <div class="tl-item reveal"><h3>🌐 Multi-language Support</h3><p>Breaking language barriers to make knowledge truly universal.</p></div>
+    <div class="tl-item reveal"><h3>🎯 Personalized Recommendations</h3><p>Smarter suggestions tailored to your learning journey and interests.</p></div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section id="faq">
+  <span class="tag reveal">Got Questions?</span>
+  <h2 class="section-title reveal">Frequently Asked <span class="grad-text">Questions</span></h2>
+  <p class="section-sub reveal">Everything you need to know about the platform.</p>
+  <div class="faq">
+    <div class="faq-item reveal"><button class="faq-q" data-act="toggleFaq">How does Seekora find information?<span>+</span></button>
+      <div class="faq-a"><p>Seekora reads public search results and a small number of readable pages. Some websites may block automated access or return limited content.</p></div></div>
+    <div class="faq-item reveal"><button class="faq-q" data-act="toggleFaq">How accurate are the AI summaries?<span>+</span></button>
+      <div class="faq-a"><p>Seekora ranks and extracts useful sentences locally. It is not a generative AI model, so check the linked source pages for context and accuracy.</p></div></div>
+    <div class="faq-item reveal"><button class="faq-q" data-act="toggleFaq">Can developers integrate it into their own apps?<span>+</span></button>
+      <div class="faq-a"><p>Seekora provides REST endpoints for web research, conversation history, and local text summaries.</p></div></div>
+    <div class="faq-item reveal"><button class="faq-q" data-act="toggleFaq">Do you partner with educational institutions?<span>+</span></button>
+      <div class="faq-a"><p>Yes — we offer institutional and educational partnerships with custom plans for schools, colleges, and universities. Contact us to learn more.</p></div></div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section id="cta">
+  <h2 class="section-title reveal">Ready to <span class="grad-text">Search Smarter?</span></h2>
+  <p class="section-sub reveal">Create an account to save conversations and continue exploring your questions.</p>
+  <button class="btn magnetic reveal" style="font-size:1.02rem;padding:17px 46px" data-act="openAuth" data-arg="signup">Create Free Account 🚀</button>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-grid">
+    <div style="max-width:300px">
+      <div class="logo" style="margin-bottom:16px"><div class="logo-icon">🤖</div>Seekora<span class="grad-text"> AI</span></div>
+      <p style="color:var(--muted);font-size:.88rem">Ask questions, explore topics, and keep useful conversations together.</p>
+      <div class="newsletter">
+        <input type="email" id="nlEmail" placeholder="Your email for updates">
+        <button class="btn" style="padding:12px 18px" data-act="subscribe">→</button>
+      </div>
+    </div>
+    <div><h4>Product</h4><a href="#features">Features</a><a href="#pricing">Pricing</a><a href="#roadmap">Roadmap</a><a href="#">API Access</a></div>
+    <div><h4>Company</h4><a href="#">About Us</a><a href="#">Educational Partners</a><a href="#">Careers</a><a href="#">Contact</a></div>
+    <div><h4>Community</h4><a href="#">GitHub</a><a href="#">Developer Community</a><a href="#">Social Media</a><a href="#">Blog</a></div>
+  </div>
+  <div class="copyright">© 2026 Seekora AI · Search Smarter, Learn Faster</div>
+</footer>
+
+<!-- AUTH MODAL -->
+<div id="authModal" data-act="backdropCloseAuth">
+  <div class="auth-box">
+    <button class="auth-close" data-act="closeAuth">✕</button>
+    <h2 style="font-size:1.5rem">Welcome <span class="grad-text">Aboard</span> 👋</h2>
+    <div class="auth-tabs">
+      <button id="tabLogin" data-act="authTab" data-arg="login">Log In</button>
+      <button id="tabSignup" class="on" data-act="authTab" data-arg="signup">Sign Up</button>
+    </div>
+    <input type="text" id="authName" placeholder="Full name" autocomplete="name" maxlength="80">
+    <input type="email" id="authEmail" placeholder="Email address" autocomplete="email" maxlength="254">
+    <input type="password" id="authPass" placeholder="Password (at least 12 characters)" autocomplete="new-password" maxlength="128">
+    <button class="btn" id="authSubmit" style="width:100%" data-act="doAuth">Create Account 🚀</button>
+    <p id="authError" role="alert" style="color:var(--pink);font-size:.84rem;margin-top:12px;min-height:1.2em"></p>
+    <p style="color:var(--muted);font-size:.8rem;margin-top:14px">Passwords are stored as secure hashes. Your sign-in uses a protected Tomcat session.</p>
+  </div>
+</div>
+
+<!-- CHAT WIDGET -->
+<button id="chatFab" data-act="toggleChat" title="AI Assistant">💬</button>
+<div id="chatPanel">
+  <div class="chat-head">🤖 AI Assistant <span class="status">Online</span></div>
+  <div class="chat-body" id="chatBody">
+    <div class="msg bot">Hi! I’m Seekora 👋 Ask a question or request help summarizing text.</div>
+  </div>
+  <div class="chat-input">
+    <input type="text" id="chatInput" placeholder="Type a message…" data-enter="sendChat">
+    <button class="chat-send" data-act="sendChat">➤</button>
+  </div>
+</div>
+
+<!-- COMMAND PALETTE -->
+<div id="palette" data-act="backdropClosePalette">
+  <div class="palette-box">
+    <input type="text" id="paletteInput" placeholder="Type a command or search…" data-input="filterPalette" data-keys="paletteKeys">
+    <div id="paletteList"></div>
+  </div>
+</div>
+
+<div id="toast">Hello!</div>
+<button id="toTop" data-act="toTop" title="Back to top">↑</button>
+
+<script src="/js/seekora.js"></script>
+</body>
+</html>

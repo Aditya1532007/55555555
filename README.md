@@ -16,7 +16,9 @@ Open `http://localhost:8080`. Run the tests with `mvn -s maven-settings.xml test
 
 ### Build and deploy
 
-Run `mvn -s maven-settings.xml clean package`, then start the executable with `java -jar target/seekora-0.1.0.jar`. Keep the process running and point a reverse proxy or ngrok at port 8080. There is no external Tomcat deployment directory, WAR, `web.xml`, or `/api/search` mapping in this checkout. The chat API used by the existing page is `POST /api/v1/chat`.
+Run `mvn -s maven-settings.xml clean package`, then start the executable with `java -jar target/seekora-0.1.0.jar`. Keep the process running and point a reverse proxy or ngrok at port 8080. There is no external Tomcat deployment directory, WAR, `web.xml`, or `/api/search` mapping in this checkout.
+
+For Render, use the Dockerfile (or build command `mvn -B -DskipTests package` and start command `java -Dserver.address=0.0.0.0 -Dserver.port=$PORT -jar target/seekora-0.1.0.jar`). Render supplies `$PORT`; do not hardcode 8081 or 10000. For persistent production data, attach a Render PostgreSQL database and set `SPRING_DATASOURCE_URL` to its JDBC URL (`jdbc:postgresql://...`), plus `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`, and `DDL_AUTO=update` for the first deploy. After validating the schema, switch `DDL_AUTO=validate` and manage future changes with migrations. Set `SEEKORA_COOKIE_SECURE=true`, `SEEKORA_AI_API_KEY`, and `SEEKORA_CORS_ORIGINS` only when the browser is hosted on a different origin. The chat API used by the existing page is `POST /api/v1/chat`.
 
 The project uses Spring Boot 3 and embedded Tomcat 10.1 (Jakarta Servlet 6). An external Tomcat 9 installation is incompatible with these servlet APIs; use the executable JAR as shown, or plan a deliberate container migration before targeting Tomcat 9.
 

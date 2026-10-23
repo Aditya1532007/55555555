@@ -2,9 +2,14 @@ spring:
   application:
     name: seekora
   datasource:
-    url: jdbc:h2:file:./data/seekora;AUTO_SERVER=TRUE
-    username: sa
-    password:
+    # Set SPRING_DATASOURCE_URL, username, and password on Render for PostgreSQL.
+    # The file-backed H2 default keeps local development self-contained.
+    url: ${SPRING_DATASOURCE_URL:jdbc:h2:file:./data/seekora;AUTO_SERVER=TRUE}
+    username: ${SPRING_DATASOURCE_USERNAME:sa}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:10}
+      connection-timeout: ${DB_CONNECTION_TIMEOUT_MS:10000}
   jpa:
     hibernate:
       ddl-auto: ${DDL_AUTO:update}

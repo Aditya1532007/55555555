@@ -11,7 +11,7 @@ spring:
     open-in-view: false
   h2:
     console:
-      enabled: true
+      enabled: false   # never expose the H2 web console; it is a remote database shell
   jackson:
     default-property-inclusion: non_null
   web:
@@ -22,9 +22,10 @@ spring:
 server:
   port: ${PORT:8080}
   shutdown: graceful
-  forward-headers-strategy: framework
+  forward-headers-strategy: framework   # trust Render's X-Forwarded-* headers so https/host checks see the public URL
   servlet:
     session:
+      timeout: ${SEEKORA_SESSION_TIMEOUT:8h}   # idle timeout; the user must sign in again afterwards
       cookie:
         http-only: true
         same-site: lax
@@ -35,7 +36,9 @@ seekora:
     api-key: ${SEEKORA_AI_API_KEY:}
     base-url: ${SEEKORA_AI_BASE_URL:https://api.openai.com/v1}
     model: ${SEEKORA_AI_MODEL:gpt-4o-mini}
-    timeout-seconds: ${SEEKORA_AI_TIMEOUT_SECONDS:60}
+    timeout-seconds: ${SEEKORA_AI_TIMEOUT_SECONDS:60}               # read (response) timeout
+    connect-timeout-seconds: ${SEEKORA_AI_CONNECT_TIMEOUT_SECONDS:5}
+    max-retries: ${SEEKORA_AI_MAX_RETRIES:1}                        # only for HTTP 500/502/503 and connection failures
     temperature: ${SEEKORA_AI_TEMPERATURE:0.2}   # leave empty to omit (some newer models reject it)
     required: ${SEEKORA_AI_REQUIRED:false}       # true = return a configuration error instead of the extractive fallback
   research:
@@ -43,6 +46,10 @@ seekora:
     wikipedia-api-url: ${SEEKORA_WIKIPEDIA_API_URL:https://en.wikipedia.org/w/api.php}
   cors:
     allowed-origins: ${SEEKORA_CORS_ORIGINS:}
+  limits:
+    chat-per-account-per-hour: ${SEEKORA_CHAT_PER_ACCOUNT_PER_HOUR:60}
+    chat-global-per-hour: ${SEEKORA_CHAT_GLOBAL_PER_HOUR:1000}
+    failed-logins-per-15-min: ${SEEKORA_FAILED_LOGINS_PER_15_MIN:10}
 management:
   endpoints:
     web:

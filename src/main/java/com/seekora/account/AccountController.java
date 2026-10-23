@@ -1,11 +1,15 @@
 package com.seekora.account;
 
+import com.seekora.security.RateLimiter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
+import java.time.Duration;
+import java.util.Locale;
 import java.util.UUID;
 import static com.seekora.account.AccountDtos.*;
 
@@ -15,7 +19,14 @@ public class AccountController {
     public static final String SESSION_ACCOUNT_ID = "seekora.accountId";
     private final AccountService accounts;
 
-    public AccountController(AccountService accounts) { this.accounts = accounts; }
+    /** Failed sign-ins per email address per 15 minutes; slows password guessing without revealing which emails exist. */
+    private final RateLimiter failedLogins;
+
+    public AccountController(AccountService accounts,
+                             @Value("${seekora.limits.failed-logins-per-15-min:10}") int maxFailedLogins) {
+        this.accounts = accounts;
+        this.failedLogins = new RateLimiter(maxFailedLogins, Duration.ofMinutes(15));
+    }
 
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
@@ -27,7 +38,18 @@ public class AccountController {
 
     @PostMapping("/login")
     public AccountResponse login(@Valid @RequestBody LoginRequest request, HttpServletRequest servletRequest) {
-        AccountUser user = accounts.authenticate(request);
+        String key = request.email().trim().toLowerCase(Locale.ROOT);
+        if (failedLogins.isBlocked(key)) {
+            throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "Too many failed sign-in attempts. Please try again in a few minutes.");
+        }
+        AccountUser user;
+        try {
+            user = accounts.authenticate(request);
+        } catch (InvalidCredentialsException ex) {
+            failedLogins.tryHit(key);
+            throw ex;
+        }
+        failedLogins.reset(key);
         establishSession(servletRequest, user.getId());
         return toResponse(user);
     }

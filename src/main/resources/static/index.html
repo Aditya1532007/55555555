@@ -266,9 +266,10 @@
     <input type="text" id="authName" placeholder="Full name" autocomplete="name" maxlength="80">
     <input type="email" id="authEmail" placeholder="Email address" autocomplete="email" maxlength="254">
     <input type="password" id="authPass" placeholder="Password (at least 12 characters)" autocomplete="new-password" maxlength="128">
+    <input type="password" id="authPass2" placeholder="Confirm password" autocomplete="new-password" maxlength="128">
     <button class="btn" id="authSubmit" style="width:100%" data-act="doAuth">Create Account 🚀</button>
     <p id="authError" role="alert" style="color:var(--pink);font-size:.84rem;margin-top:12px;min-height:1.2em"></p>
-    <p style="color:var(--muted);font-size:.8rem;margin-top:14px">Passwords are stored as secure hashes. Your sign-in uses a protected Tomcat session.</p>
+    <p style="color:var(--muted);font-size:.8rem;margin-top:14px">Sign in to ask questions. Passwords are stored as secure hashes and your session uses a protected, HttpOnly cookie.</p>
   </div>
 </div>
 
@@ -277,7 +278,7 @@
 <div id="chatPanel">
   <div class="chat-head">🤖 AI Assistant <span class="status">Online</span></div>
   <div class="chat-body" id="chatBody">
-    <div class="msg bot">Hi! I’m Seekora 👋 Ask a question or request help summarizing text.</div>
+    <div class="msg bot">Hi! I’m Seekora 👋 Log in to ask a question or request help summarizing text.</div>
   </div>
   <div class="chat-input">
     <input type="text" id="chatInput" placeholder="Type a message…" data-enter="sendChat">

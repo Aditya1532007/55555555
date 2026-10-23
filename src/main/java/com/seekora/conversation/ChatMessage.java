@@ -5,7 +5,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "chat_messages")
+@Table(name = "chat_messages", indexes = @Index(name = "idx_chat_messages_conversation", columnList = "conversation_id"))
 public class ChatMessage {
     @Id
     private UUID id;
@@ -14,12 +14,12 @@ public class ChatMessage {
     private Conversation conversation;
     @Column(nullable = false, length = 16)
     private String role;
-    @Column(nullable = false, columnDefinition = "CLOB")
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
     @Column(nullable = false)
     private Instant createdAt;
     /** JSON array of the sources used for an assistant answer (null for user messages and older rows). */
-    @Column(columnDefinition = "CLOB")
+    @Column(columnDefinition = "TEXT")
     private String sourcesJson;
     /** "ai" or "extractive" for assistant answers (null for user messages and older rows). */
     @Column(length = 16)

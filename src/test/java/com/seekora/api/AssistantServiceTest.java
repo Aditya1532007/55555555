@@ -31,7 +31,8 @@ class AssistantServiceTest {
     private AnswerGenerator generator;
     private AssistantService service;
     private WebResearchService.ResearchSource source;
-    private final Caller guest = Caller.guest(new HashSet<>());
+    private final UUID userId = UUID.randomUUID();
+    private final Caller caller = Caller.user(userId);
 
     @BeforeEach
     void setUp() {
@@ -49,7 +50,7 @@ class AssistantServiceTest {
     @Test
     void usesLocalEvidenceSummaryWhenNoProviderIsConfigured() {
         when(generator.isConfigured()).thenReturn(false);
-        var response = service.chat(new ChatRequest("question", null), guest);
+        var response = service.chat(new ChatRequest("question", null), caller);
         assertTrue(response.assistantMessage().content().startsWith("Extractive web summary (AI provider not configured):"));
         assertEquals("extractive", response.answerMode());
         assertEquals("used", response.searchStatus());
@@ -63,19 +64,18 @@ class AssistantServiceTest {
     void usesConfiguredProviderAndReturnsRetrievedCitations() {
         when(generator.isConfigured()).thenReturn(true);
         when(generator.generate(eq("What causes tides?"), anyList(), anyList())).thenReturn("Generated answer [1]");
-        var response = service.chat(new ChatRequest("What causes tides?", null), guest);
+        var response = service.chat(new ChatRequest("What causes tides?", null), caller);
         assertEquals("Generated answer [1]", response.assistantMessage().content());
         assertEquals("ai", response.answerMode());
         assertEquals("https://example.org", response.sources().getFirst().url());
         assertTrue(response.notice().contains("test-model"));
-        assertTrue(guest.guestConversationIds().contains(response.conversationId()), "the guest session must now own the conversation");
     }
 
     @Test
     void doesNotPersistAFalseSuccessWhenConfiguredProviderFails() {
         when(generator.isConfigured()).thenReturn(true);
         when(generator.generate(anyString(), anyList(), anyList())).thenThrow(new AiProviderException(HttpStatus.TOO_MANY_REQUESTS, "quota"));
-        assertThrows(AiProviderException.class, () -> service.chat(new ChatRequest("question", null), guest));
+        assertThrows(AiProviderException.class, () -> service.chat(new ChatRequest("question", null), caller));
         verify(conversations, never()).save(any(Conversation.class));
     }
 
@@ -84,7 +84,7 @@ class AssistantServiceTest {
         when(generator.isConfigured()).thenReturn(true);
         when(research.research(anyString())).thenThrow(new ResearchException("Web search is temporarily unavailable."));
         when(generator.generate(anyString(), eq(List.of()), anyList())).thenReturn("Model-only answer");
-        var response = service.chat(new ChatRequest("What is the speed of light?", null), guest);
+        var response = service.chat(new ChatRequest("What is the speed of light?", null), caller);
         assertEquals("Model-only answer", response.assistantMessage().content());
         assertEquals("unavailable", response.searchStatus());
         assertTrue(response.sources().isEmpty());
@@ -95,7 +95,7 @@ class AssistantServiceTest {
     void failsClearlyWhenNeitherModelNorSearchCanAnswer() {
         when(generator.isConfigured()).thenReturn(false);
         when(research.research(anyString())).thenThrow(new ResearchException("Web search is temporarily unavailable."));
-        assertThrows(ResearchException.class, () -> service.chat(new ChatRequest("question", null), guest));
+        assertThrows(ResearchException.class, () -> service.chat(new ChatRequest("question", null), caller));
         verify(conversations, never()).save(any(Conversation.class));
     }
 
@@ -104,7 +104,7 @@ class AssistantServiceTest {
         var strict = new AssistantService(research, conversations, mock(AccountUserRepository.class), generator,
                 mock(PlatformTransactionManager.class), true);
         when(generator.isConfigured()).thenReturn(false);
-        AiProviderException error = assertThrows(AiProviderException.class, () -> strict.chat(new ChatRequest("hello there", null), guest));
+        AiProviderException error = assertThrows(AiProviderException.class, () -> strict.chat(new ChatRequest("hello there", null), caller));
         assertEquals(HttpStatus.SERVICE_UNAVAILABLE, error.getStatus());
         assertTrue(error.getMessage().contains("SEEKORA_AI_API_KEY"));
         verifyNoInteractions(research);
@@ -114,8 +114,8 @@ class AssistantServiceTest {
     void skipsWebSearchForGreetingsAndPureCodingTasks() {
         when(generator.isConfigured()).thenReturn(true);
         when(generator.generate(anyString(), anyList(), anyList())).thenReturn("fine");
-        assertEquals("skipped", service.chat(new ChatRequest("hello!", null), guest).searchStatus());
-        assertEquals("skipped", service.chat(new ChatRequest("Write a Java method that reverses a string", null), guest).searchStatus());
+        assertEquals("skipped", service.chat(new ChatRequest("hello!", null), caller).searchStatus());
+        assertEquals("skipped", service.chat(new ChatRequest("Write a Java method that reverses a string", null), caller).searchStatus());
         verifyNoInteractions(research);
     }
 
@@ -126,8 +126,8 @@ class AssistantServiceTest {
         Conversation existing = new Conversation("Tides");
         existing.addMessage(new ChatMessage("user", "What causes tides?"));
         existing.addMessage(new ChatMessage("assistant", "The Moon's gravity."));
-        Caller owner = Caller.guest(new HashSet<>(Set.of(id)));
-        when(conversations.findByIdAndUserIsNull(id)).thenReturn(Optional.of(existing));
+        Caller owner = Caller.user(userId);
+        when(conversations.findByIdAndUser_Id(id, userId)).thenReturn(Optional.of(existing));
         when(generator.generate(anyString(), anyList(), anyList())).thenReturn("Also the Sun.");
 
         service.chat(new ChatRequest("and the sun?", id), owner);
@@ -139,11 +139,11 @@ class AssistantServiceTest {
     }
 
     @Test
-    void aGuestCannotUseAnotherSessionsConversation() {
+    void aUserCannotUseAnotherUsersConversation() {
         when(generator.isConfigured()).thenReturn(true);
         UUID foreign = UUID.randomUUID();
-        assertThrows(NotFoundException.class, () -> service.chat(new ChatRequest("hi", foreign), guest));
-        verify(conversations, never()).findByIdAndUserIsNull(any());
+        assertThrows(NotFoundException.class, () -> service.chat(new ChatRequest("hi", foreign), caller));
+        verify(conversations).findByIdAndUser_Id(foreign, userId);
     }
 
     @Test

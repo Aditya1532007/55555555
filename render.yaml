@@ -1,0 +1,33 @@
+# Render Blueprint: one Docker web service + one PostgreSQL database.
+# Secrets (sync: false) are entered in the Render dashboard, never committed.
+databases:
+  - name: seekora-db
+    databaseName: seekora
+    user: seekora
+    plan: basic-256mb   # a paid plan keeps data; check Render's current pricing and free-tier expiry rules
+
+services:
+  - type: web
+    name: seekora
+    runtime: docker
+    plan: starter
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+      - key: SEEKORA_DB_HOST
+        fromDatabase: { name: seekora-db, property: host }
+      - key: SEEKORA_DB_PORT
+        fromDatabase: { name: seekora-db, property: port }
+      - key: SEEKORA_DB_NAME
+        fromDatabase: { name: seekora-db, property: database }
+      - key: SEEKORA_DB_USER
+        fromDatabase: { name: seekora-db, property: user }
+      - key: SEEKORA_DB_PASSWORD
+        fromDatabase: { name: seekora-db, property: password }
+      - key: SEEKORA_AI_API_KEY
+        sync: false
+      - key: SEEKORA_AI_BASE_URL
+        value: https://api.openai.com/v1
+      - key: SEEKORA_AI_MODEL
+        value: gpt-4o-mini

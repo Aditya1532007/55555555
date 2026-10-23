@@ -65,6 +65,9 @@ class AccountAndConversationApiTest {
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.detail").value(containsString("invalid JSON")));
         mvc.perform(post("/api/v1/chat").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"message\":\"  \"}"))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/v1/chat").session(signedInSession()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"message\":\"  \"}"))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.detail").exists());
         mvc.perform(get("/api/v1/auth/me")).andExpect(status().isUnauthorized());
         mvc.perform(post("/api/v1/auth/logout").header("Origin", "https://attacker.example"))
@@ -72,5 +75,13 @@ class AccountAndConversationApiTest {
         mvc.perform(get("/api/v1/auth/me"))
                 .andExpect(header().string("X-Content-Type-Options", "nosniff"))
                 .andExpect(header().string("X-Frame-Options", "DENY"));
+    }
+
+    private MockHttpSession signedInSession() throws Exception {
+        MvcResult r = mvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(Map.of("name", "Valid Tester", "email", "valid-" + java.util.UUID.randomUUID() + "@example.org",
+                                "password", "correct horse battery staple"))))
+                .andExpect(status().isCreated()).andReturn();
+        return (MockHttpSession) r.getRequest().getSession(false);
     }
 }

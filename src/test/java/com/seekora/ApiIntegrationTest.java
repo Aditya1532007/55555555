@@ -62,6 +62,9 @@ class ApiIntegrationTest {
         return json.readTree(r.getResponse().getContentAsByteArray());
     }
 
+    /** A fresh signed-in session; every protected endpoint now needs one. */
+    private MockHttpSession signedIn() throws Exception { return register("user-" + UUID.randomUUID() + "@example.org"); }
+
     private MockHttpSession register(String email) throws Exception {
         MvcResult r = mvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsBytes(Map.of("name", "Tester", "email", email, "password", "correct horse battery staple"))))
@@ -71,7 +74,7 @@ class ApiIntegrationTest {
 
     @Test void chatReturnsAModelAnswerWithSourcesAndPersistsFollowUps() throws Exception {
         when(ai.generate(eq("What causes tides?"), anyList(), anyList())).thenReturn("Tides come from the **Moon's** gravity [1].");
-        MockHttpSession session = new MockHttpSession();
+        MockHttpSession session = signedIn();
 
         JsonNode first = chat(session, "What causes tides?", null);
         assertEquals("ai", first.get("answerMode").asText());
@@ -94,7 +97,7 @@ class ApiIntegrationTest {
 
     @Test void chatWithoutAProviderReturnsALabelledExtractiveAnswerNotAFakeAiAnswer() throws Exception {
         when(ai.isConfigured()).thenReturn(false);
-        JsonNode body = chat(new MockHttpSession(), "What causes tides?", null);
+        JsonNode body = chat(signedIn(), "What causes tides?", null);
         assertEquals("extractive", body.get("answerMode").asText());
         assertTrue(body.get("assistantMessage").get("content").asText().startsWith("Extractive web summary (AI provider not configured)"));
         assertTrue(body.get("notice").asText().contains("No AI model is configured"));
@@ -104,16 +107,17 @@ class ApiIntegrationTest {
     @Test void chatStillAnswersWhenWebSearchIsDown() throws Exception {
         when(research.research(anyString())).thenThrow(new ResearchException("Web search is temporarily unavailable."));
         when(ai.generate(anyString(), eq(List.of()), anyList())).thenReturn("From model knowledge.");
-        JsonNode body = chat(new MockHttpSession(), "What is the capital of France?", null);
+        JsonNode body = chat(signedIn(), "What is the capital of France?", null);
         assertEquals("unavailable", body.get("searchStatus").asText());
         assertEquals("From model knowledge.", body.get("assistantMessage").get("content").asText());
         assertEquals(0, body.get("sources").size());
     }
 
     @Test void providerFailuresSurfaceAsHonestErrorStatuses() throws Exception {
+        MockHttpSession session = signedIn();
         for (Object[] c : new Object[][]{{HttpStatus.TOO_MANY_REQUESTS, 429}, {HttpStatus.SERVICE_UNAVAILABLE, 503}, {HttpStatus.GATEWAY_TIMEOUT, 504}, {HttpStatus.BAD_GATEWAY, 502}}) {
             doThrow(new AiProviderException((HttpStatus) c[0], "provider problem")).when(ai).generate(anyString(), anyList(), anyList());
-            mvc.perform(post("/api/v1/chat").contentType(MediaType.APPLICATION_JSON).content(chatBody("a question", null)))
+            mvc.perform(post("/api/v1/chat").session(session).contentType(MediaType.APPLICATION_JSON).content(chatBody("a question", null)))
                     .andExpect(status().is((Integer) c[1])).andExpect(jsonPath("$.detail").value("provider problem"));
         }
     }
@@ -121,62 +125,53 @@ class ApiIntegrationTest {
     @Test void noAnswerAndNoSearchIsAnErrorNotASuccess() throws Exception {
         when(ai.isConfigured()).thenReturn(false);
         when(research.research(anyString())).thenThrow(new ResearchException("Web search is temporarily unavailable. Please try again shortly."));
-        mvc.perform(post("/api/v1/chat").contentType(MediaType.APPLICATION_JSON).content(chatBody("question", null)))
+        mvc.perform(post("/api/v1/chat").session(signedIn()).contentType(MediaType.APPLICATION_JSON).content(chatBody("question", null)))
                 .andExpect(status().isBadGateway()).andExpect(jsonPath("$.detail").value(containsString("unavailable")));
     }
 
     @Test void chatRejectsInvalidInput() throws Exception {
-        mvc.perform(post("/api/v1/chat").contentType(MediaType.APPLICATION_JSON).content("{\"message\":\"   \"}")).andExpect(status().isBadRequest()).andExpect(jsonPath("$.detail").exists());
-        mvc.perform(post("/api/v1/chat").contentType(MediaType.APPLICATION_JSON).content("{}")).andExpect(status().isBadRequest());
-        mvc.perform(post("/api/v1/chat").contentType(MediaType.APPLICATION_JSON).content("{")).andExpect(status().isBadRequest()).andExpect(jsonPath("$.detail").value(containsString("invalid JSON")));
-        mvc.perform(post("/api/v1/chat").contentType(MediaType.APPLICATION_JSON).content(chatBody("x".repeat(30001), null))).andExpect(status().isBadRequest());
-        mvc.perform(post("/api/v1/chat").contentType(MediaType.APPLICATION_JSON).content("{\"message\":\"hi\",\"conversationId\":\"not-a-uuid\"}")).andExpect(status().isBadRequest());
-        mvc.perform(post("/api/v1/chat").contentType(MediaType.TEXT_PLAIN).content("hi")).andExpect(status().isUnsupportedMediaType());
-        mvc.perform(post("/api/v1/chat")).andExpect(status().is4xxClientError());
+        MockHttpSession s = signedIn();
+        mvc.perform(post("/api/v1/chat").session(s).contentType(MediaType.APPLICATION_JSON).content("{\"message\":\"   \"}")).andExpect(status().isBadRequest()).andExpect(jsonPath("$.detail").exists());
+        mvc.perform(post("/api/v1/chat").session(s).contentType(MediaType.APPLICATION_JSON).content("{}")).andExpect(status().isBadRequest());
+        mvc.perform(post("/api/v1/chat").session(s).contentType(MediaType.APPLICATION_JSON).content("{")).andExpect(status().isBadRequest()).andExpect(jsonPath("$.detail").value(containsString("invalid JSON")));
+        mvc.perform(post("/api/v1/chat").session(s).contentType(MediaType.APPLICATION_JSON).content(chatBody("x".repeat(30001), null))).andExpect(status().isBadRequest());
+        mvc.perform(post("/api/v1/chat").session(s).contentType(MediaType.APPLICATION_JSON).content("{\"message\":\"hi\",\"conversationId\":\"not-a-uuid\"}")).andExpect(status().isBadRequest());
+        mvc.perform(post("/api/v1/chat").session(s).contentType(MediaType.TEXT_PLAIN).content("hi")).andExpect(status().isUnsupportedMediaType());
+        mvc.perform(post("/api/v1/chat").session(s)).andExpect(status().is4xxClientError());
     }
 
     @Test void unknownResourcesAndMethodsReturnProperClientErrors() throws Exception {
-        mvc.perform(get("/api/v1/conversations/{id}", UUID.randomUUID())).andExpect(status().isNotFound());
-        mvc.perform(delete("/api/v1/conversations/{id}", UUID.randomUUID())).andExpect(status().isNotFound());
-        mvc.perform(get("/api/v1/conversations/not-a-uuid")).andExpect(status().isBadRequest());
-        mvc.perform(get("/api/v1/does-not-exist")).andExpect(status().isNotFound());
-        mvc.perform(get("/api/v1/chat")).andExpect(status().isMethodNotAllowed());
+        MockHttpSession s = signedIn();
+        mvc.perform(get("/api/v1/conversations/{id}", UUID.randomUUID()).session(s)).andExpect(status().isNotFound());
+        mvc.perform(delete("/api/v1/conversations/{id}", UUID.randomUUID()).session(s)).andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/conversations/not-a-uuid").session(s)).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/does-not-exist").session(s)).andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/chat").session(s)).andExpect(status().isMethodNotAllowed());
     }
 
-    @Test void guestsCannotSeeOrTouchEachOthersConversations() throws Exception {
-        when(ai.generate(anyString(), anyList(), anyList())).thenReturn("answer");
-        MockHttpSession alice = new MockHttpSession(), mallory = new MockHttpSession();
-        String id = chat(alice, "alice private question about her medical results", null).get("conversationId").asText();
-
-        mvc.perform(get("/api/v1/conversations").session(alice)).andExpect(jsonPath("$", hasSize(1)));
-        mvc.perform(get("/api/v1/conversations").session(mallory)).andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(0)));
-        mvc.perform(get("/api/v1/conversations")).andExpect(jsonPath("$", hasSize(0)));
-        mvc.perform(get("/api/v1/conversations/{id}", id).session(mallory)).andExpect(status().isNotFound());
-        mvc.perform(delete("/api/v1/conversations/{id}", id).session(mallory)).andExpect(status().isNotFound());
-        mvc.perform(post("/api/v1/chat").session(mallory).contentType(MediaType.APPLICATION_JSON).content(chatBody("hijack", id))).andExpect(status().isNotFound());
-        mvc.perform(get("/api/v1/conversations/{id}", id).session(alice)).andExpect(status().isOk());
-    }
-
-    @Test void signedInUsersAreIsolatedFromEachOtherAndFromGuests() throws Exception {
+    @Test void signedInUsersAreIsolatedFromEachOther() throws Exception {
         when(ai.generate(anyString(), anyList(), anyList())).thenReturn("answer");
         MockHttpSession a = register("iso-a@example.org"), b = register("iso-b@example.org");
         String id = chat(a, "question from user a", null).get("conversationId").asText();
         mvc.perform(get("/api/v1/conversations").session(a)).andExpect(jsonPath("$", hasSize(1)));
         mvc.perform(get("/api/v1/conversations").session(b)).andExpect(jsonPath("$", hasSize(0)));
         mvc.perform(get("/api/v1/conversations/{id}", id).session(b)).andExpect(status().isNotFound());
-        mvc.perform(get("/api/v1/conversations/{id}", id)).andExpect(status().isNotFound());
+        mvc.perform(delete("/api/v1/conversations/{id}", id).session(b)).andExpect(status().isNotFound());
+        mvc.perform(post("/api/v1/chat").session(b).contentType(MediaType.APPLICATION_JSON).content(chatBody("hijack", id))).andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/conversations/{id}", id)).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/conversations/{id}", id).session(a)).andExpect(status().isOk());
     }
 
     @Test void conversationListReturnsSummariesWithoutMessages() throws Exception {
         when(ai.generate(anyString(), anyList(), anyList())).thenReturn("answer");
-        MockHttpSession s = new MockHttpSession();
+        MockHttpSession s = signedIn();
         chat(s, "first question", null);
         mvc.perform(get("/api/v1/conversations").session(s)).andExpect(jsonPath("$[0].title").value("first question"))
                 .andExpect(jsonPath("$[0].messages").doesNotExist());
     }
 
-    @Test void conversationCrudWorksForGuests() throws Exception {
-        MockHttpSession s = new MockHttpSession();
+    @Test void conversationCrudWorksForSignedInUsers() throws Exception {
+        MockHttpSession s = signedIn();
         MvcResult created = mvc.perform(post("/api/v1/conversations").session(s).contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"Research notes\"}"))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.title").value("Research notes")).andReturn();
         String id = json.readTree(created.getResponse().getContentAsByteArray()).get("id").asText();
@@ -220,13 +215,14 @@ class ApiIntegrationTest {
     }
 
     @Test void summarizeProducesAnExtractiveSummaryAndValidatesInput() throws Exception {
+        MockHttpSession s = signedIn();
         String text = "Solar panels convert sunlight into electricity using photovoltaic cells. The cells are made of silicon. "
                 + "Silicon cells are connected in series to form panels. Panels are mounted on roofs or in large solar farms. "
                 + "Electricity from panels can be stored in batteries or fed into the grid. The cost of panels has fallen sharply.";
-        mvc.perform(post("/api/v1/summarize").contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsBytes(Map.of("text", text, "instruction", "2 bullet points"))))
+        mvc.perform(post("/api/v1/summarize").session(s).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsBytes(Map.of("text", text, "instruction", "2 bullet points"))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.summary", containsString("- ")));
-        mvc.perform(post("/api/v1/summarize").contentType(MediaType.APPLICATION_JSON).content("{\"text\":\"  \"}")).andExpect(status().isBadRequest());
-        mvc.perform(post("/api/v1/summarize").contentType(MediaType.APPLICATION_JSON).content("{\"text\":\"ok\",\"instruction\":\"" + "x".repeat(501) + "\"}")).andExpect(status().isBadRequest());
+        mvc.perform(post("/api/v1/summarize").session(s).contentType(MediaType.APPLICATION_JSON).content("{\"text\":\"  \"}")).andExpect(status().isBadRequest());
+        mvc.perform(post("/api/v1/summarize").session(s).contentType(MediaType.APPLICATION_JSON).content("{\"text\":\"ok\",\"instruction\":\"" + "x".repeat(501) + "\"}")).andExpect(status().isBadRequest());
     }
 
     @Test void securityHeadersAndNoStoreOnApi() throws Exception {

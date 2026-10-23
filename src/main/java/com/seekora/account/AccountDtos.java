@@ -12,7 +12,9 @@ public final class AccountDtos {
     public record RegisterRequest(
             @NotBlank @Size(min = 2, max = 80) String name,
             @NotBlank @Email @Size(max = 254) String email,
-            @NotBlank @Size(min = 12, max = 128) String password) { }
+            @NotBlank @Size(min = 12, max = 128) String password,
+            /** Optional for API clients; the web form always sends it and the server verifies it. */
+            @Size(max = 128) String confirmPassword) { }
 
     public record LoginRequest(
             @NotBlank @Email @Size(max = 254) String email,

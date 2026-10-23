@@ -1,0 +1,12 @@
+.git
+.gitignore
+.idea
+.vscode
+target
+.m2repo
+.tools
+data
+.env
+.env.*
+!.env.example
+*.md

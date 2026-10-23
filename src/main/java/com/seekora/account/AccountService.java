@@ -1,6 +1,8 @@
 package com.seekora.account;
 
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import static com.seekora.account.AccountDtos.*;
@@ -20,6 +22,9 @@ public class AccountService {
 
     @Transactional
     public AccountUser register(RegisterRequest request) {
+        if (request.confirmPassword() != null && !request.password().equals(request.confirmPassword())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Passwords do not match.");
+        }
         String email = normalizeEmail(request.email());
         if (users.existsByEmail(email)) throw new EmailAlreadyExistsException();
         AccountUser user = new AccountUser(request.name().trim(), email, passwords.hash(request.password()));

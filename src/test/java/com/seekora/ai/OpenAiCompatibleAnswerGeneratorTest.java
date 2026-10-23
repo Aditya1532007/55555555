@@ -162,4 +162,50 @@ class OpenAiCompatibleAnswerGeneratorTest {
         new OpenAiCompatibleAnswerGenerator("k", "m", url2, 30, "0.7").generate("q", List.of(), List.of());
         assertTrue(lastBody.get().contains("\"temperature\":0.7"));
     }
+
+    // ---- transient-failure retry policy
+
+    private OpenAiCompatibleAnswerGenerator configured(String url) { return new OpenAiCompatibleAnswerGenerator("test-key", "m", url, 5, "0.2", 2, 1); }
+
+    @Test void aTransient503IsRetriedOnceAndThenSucceeds() throws IOException {
+        java.util.concurrent.atomic.AtomicInteger calls = new java.util.concurrent.atomic.AtomicInteger();
+        String url = start(ex -> { if (calls.incrementAndGet() == 1) reply(ex, 503, "{}"); else reply(ex, 200, ok("Recovered answer")); });
+        assertEquals("Recovered answer", configured(url).generate("q", List.of(), List.of()));
+        assertEquals(2, calls.get());
+    }
+
+    @Test void retriesAreBoundedAndTheFinalErrorIsReported() throws IOException {
+        java.util.concurrent.atomic.AtomicInteger calls = new java.util.concurrent.atomic.AtomicInteger();
+        String url = start(ex -> { calls.incrementAndGet(); reply(ex, 502, "{}"); });
+        AiProviderException e = assertThrows(AiProviderException.class, () -> configured(url).generate("q", List.of(), List.of()));
+        assertEquals(HttpStatus.BAD_GATEWAY, e.getStatus());
+        assertEquals(2, calls.get(), "one attempt plus exactly one retry");
+    }
+
+    @Test void credentialQuotaAndBadRequestErrorsAreNeverRetried() throws IOException {
+        for (int code : new int[]{401, 403, 429, 404, 400}) {
+            java.util.concurrent.atomic.AtomicInteger calls = new java.util.concurrent.atomic.AtomicInteger();
+            String url = start(ex -> { calls.incrementAndGet(); reply(ex, code, "{\"error\":\"sk-secret-value rejected\"}"); });
+            AiProviderException e = assertThrows(AiProviderException.class, () -> configured(url).generate("q", List.of(), List.of()));
+            assertEquals(1, calls.get(), "HTTP " + code + " must not be retried");
+            assertFalse(e.getMessage().contains("sk-secret"), "provider bodies must not reach the browser");
+            server.stop(0);
+        }
+    }
+
+    @Test void aSlowProviderTimesOutWithoutBeingRetried() throws IOException {
+        java.util.concurrent.atomic.AtomicInteger calls = new java.util.concurrent.atomic.AtomicInteger();
+        String url = start(ex -> { calls.incrementAndGet(); try { Thread.sleep(2500); } catch (InterruptedException ignored) { } });
+        OpenAiCompatibleAnswerGenerator slow = new OpenAiCompatibleAnswerGenerator("test-key", "m", url, 1, "0.2", 2, 1);
+        AiProviderException e = assertThrows(AiProviderException.class, () -> slow.generate("q", List.of(), List.of()));
+        assertEquals(HttpStatus.GATEWAY_TIMEOUT, e.getStatus());
+        assertEquals(1, calls.get());
+    }
+
+    @Test void theApiKeyIsSentAsABearerTokenAndNeverInTheBody() throws IOException {
+        String url = start(ex -> reply(ex, 200, ok("fine")));
+        configured(url).generate("q", List.of(), List.of());
+        assertEquals("Bearer test-key", lastAuth.get());
+        assertFalse(lastBody.get().contains("test-key"));
+    }
 }

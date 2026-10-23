@@ -56,9 +56,15 @@ public class OpenAiCompatibleAnswerGenerator implements AnswerGenerator {
     private final Double temperature;
     private final boolean keylessLocal;
     private final RestClient client;
+    private final int maxRetries;
+    private final long retryBackoffMillis;
 
     public OpenAiCompatibleAnswerGenerator(String apiKey, String model, String baseUrl) {
         this(apiKey, model, baseUrl, 60, "0.2");
+    }
+
+    public OpenAiCompatibleAnswerGenerator(String apiKey, String model, String baseUrl, int timeoutSeconds, String temperature) {
+        this(apiKey, model, baseUrl, timeoutSeconds, temperature, 5, 1);
     }
 
     @Autowired
@@ -67,7 +73,9 @@ public class OpenAiCompatibleAnswerGenerator implements AnswerGenerator {
             @Value("${seekora.ai.model:gpt-4o-mini}") String model,
             @Value("${seekora.ai.base-url:https://api.openai.com/v1}") String baseUrl,
             @Value("${seekora.ai.timeout-seconds:60}") int timeoutSeconds,
-            @Value("${seekora.ai.temperature:0.2}") String temperature) {
+            @Value("${seekora.ai.temperature:0.2}") String temperature,
+            @Value("${seekora.ai.connect-timeout-seconds:5}") int connectTimeoutSeconds,
+            @Value("${seekora.ai.max-retries:1}") int maxRetries) {
         this.apiKey = apiKey == null ? "" : apiKey.trim();
         this.model = model == null || model.isBlank() ? "gpt-4o-mini" : model.trim();
         this.baseUrl = baseUrl == null ? "" : baseUrl.trim().replaceAll("/+$", "");
@@ -75,10 +83,18 @@ public class OpenAiCompatibleAnswerGenerator implements AnswerGenerator {
         this.keylessLocal = isLoopbackHost(this.host);
         this.temperature = parseTemperature(temperature);
 
-        HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+        HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(Math.max(1, connectTimeoutSeconds))).build();
         JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
         requestFactory.setReadTimeout(Duration.ofSeconds(Math.max(1, timeoutSeconds)));
         this.client = RestClient.builder().baseUrl(this.baseUrl).requestFactory(requestFactory).build();
+        this.maxRetries = Math.max(0, Math.min(maxRetries, 3));
+        this.retryBackoffMillis = 400;
+        log.info("AI provider: host='{}', model='{}', configured={}, readTimeout={}s, connectTimeout={}s, maxRetries={}",
+                host, this.model, isConfigured(), timeoutSeconds, connectTimeoutSeconds, this.maxRetries);
+        if (!isConfigured()) {
+            log.warn("No AI provider is configured (SEEKORA_AI_API_KEY is empty). Answers will use the extractive web "
+                    + "fallback, or fail if SEEKORA_AI_REQUIRED=true.");
+        }
     }
 
     /** Configured when a key is set, or when the endpoint is a local server (Ollama, LM Studio) that needs none. */
@@ -125,23 +141,54 @@ public class OpenAiCompatibleAnswerGenerator implements AnswerGenerator {
         body.put("messages", messages);
         if (temperature != null) body.put("temperature", temperature);
 
-        try {
-            RestClient.RequestBodySpec request = client.post().uri("/chat/completions");
-            if (!apiKey.isBlank()) request = request.header("Authorization", "Bearer " + apiKey);
-            Map<?, ?> response = request.body(body).retrieve().body(Map.class);
-            return extractContent(response);
-        } catch (RestClientResponseException ex) {
-            throw mapHttpError(ex);
-        } catch (ResourceAccessException | java.util.concurrent.CancellationException ex) {
-            // The JDK HTTP client reports a read timeout as either ResourceAccessException or a cancelled request.
-            log.warn("AI provider {} unreachable or timed out: {}", host, ex.getClass().getSimpleName());
-            throw new AiProviderException(HttpStatus.GATEWAY_TIMEOUT,
-                    "The AI provider timed out or could not be reached. Please try again.");
-        } catch (RestClientException ex) {
-            log.warn("AI provider {} returned an unreadable response: {}", host, ex.getClass().getSimpleName());
-            throw new AiProviderException(HttpStatus.BAD_GATEWAY,
-                    "The AI provider returned an invalid response. Please try again later.");
+        int attempt = 0;
+        while (true) {
+            try {
+                RestClient.RequestBodySpec request = client.post().uri("/chat/completions");
+                if (!apiKey.isBlank()) request = request.header("Authorization", "Bearer " + apiKey);
+                Map<?, ?> response = request.body(body).retrieve().body(Map.class);
+                return extractContent(response);
+            } catch (RestClientResponseException ex) {
+                int code = ex.getStatusCode().value();
+                // Only transient server-side failures are retried; auth, quota and bad-request errors never are.
+                if (attempt < maxRetries && (code == 500 || code == 502 || code == 503)) {
+                    attempt++;
+                    log.warn("AI provider {} returned HTTP {}; retrying ({}/{})", host, code, attempt, maxRetries);
+                    pause(attempt);
+                    continue;
+                }
+                throw mapHttpError(ex);
+            } catch (ResourceAccessException | java.util.concurrent.CancellationException ex) {
+                // A read timeout is not retried (it already cost the full timeout); connection failures are.
+                if (attempt < maxRetries && isConnectFailure(ex)) {
+                    attempt++;
+                    log.warn("Could not connect to AI provider {}; retrying ({}/{})", host, attempt, maxRetries);
+                    pause(attempt);
+                    continue;
+                }
+                // The JDK HTTP client reports a read timeout as either ResourceAccessException or a cancelled request.
+                log.warn("AI provider {} unreachable or timed out: {}", host, ex.getClass().getSimpleName());
+                throw new AiProviderException(HttpStatus.GATEWAY_TIMEOUT,
+                        "The AI provider timed out or could not be reached. Please try again.");
+            } catch (RestClientException ex) {
+                log.warn("AI provider {} returned an unreadable response: {}", host, ex.getClass().getSimpleName());
+                throw new AiProviderException(HttpStatus.BAD_GATEWAY,
+                        "The AI provider returned an invalid response. Please try again later.");
+            }
         }
+    }
+
+    private static boolean isConnectFailure(Throwable ex) {
+        for (Throwable t = ex; t != null; t = t.getCause()) {
+            if (t instanceof java.net.ConnectException || t instanceof java.net.http.HttpConnectTimeoutException
+                    || t instanceof java.net.UnknownHostException) return true;
+        }
+        return false;
+    }
+
+    private void pause(int attempt) {
+        try { Thread.sleep(retryBackoffMillis * attempt); }
+        catch (InterruptedException e) { Thread.currentThread().interrupt(); }
     }
 
     private String extractContent(Map<?, ?> response) {

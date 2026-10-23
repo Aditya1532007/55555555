@@ -116,12 +116,11 @@ public class AssistantService {
 
         return Objects.requireNonNull(tx.execute(txStatus -> {
             Conversation conversation = request.conversationId() == null
-                    ? new Conversation(titleFrom(message), caller.isGuest() ? null : users.getReferenceById(caller.userId()))
+                    ? new Conversation(titleFrom(message), users.getReferenceById(caller.userId()))
                     : findConversation(request.conversationId(), caller);
             conversation.addMessage(userMessage);
             conversation.addMessage(assistantMessage);
             conversations.save(conversation);
-            if (caller.isGuest()) caller.guestConversationIds().add(conversation.getId());
             return new ChatResponse(conversation.getId(), conversation.getTitle(), toDto(userMessage),
                     toDto(assistantMessage), sourceDtos, mode, status, answerNotice);
         }));
@@ -140,14 +139,7 @@ public class AssistantService {
 
     @Transactional(readOnly = true)
     public List<ConversationDto> list(Caller caller) {
-        List<Conversation> owned;
-        if (!caller.isGuest()) {
-            owned = conversations.findAllByUser_IdOrderByUpdatedAtDesc(caller.userId());
-        } else if (caller.guestConversationIds().isEmpty()) {
-            owned = List.of();
-        } else {
-            owned = conversations.findAllByIdInAndUserIsNullOrderByUpdatedAtDesc(List.copyOf(caller.guestConversationIds()));
-        }
+        List<Conversation> owned = conversations.findAllByUser_IdOrderByUpdatedAtDesc(caller.userId());
         // Summaries only: loading every message of every conversation just to draw a list is wasteful.
         return owned.stream().map(c -> new ConversationDto(c.getId(), c.getTitle(), c.getCreatedAt(), c.getUpdatedAt(), null)).toList();
     }
@@ -155,15 +147,13 @@ public class AssistantService {
     @Transactional
     public ConversationDto create(CreateConversationRequest request, Caller caller) {
         String title = request.title() == null || request.title().isBlank() ? "New conversation" : request.title().trim();
-        Conversation saved = conversations.save(new Conversation(title, caller.isGuest() ? null : users.getReferenceById(caller.userId())));
-        if (caller.isGuest()) caller.guestConversationIds().add(saved.getId());
+        Conversation saved = conversations.save(new Conversation(title, users.getReferenceById(caller.userId())));
         return toDto(saved);
     }
 
     @Transactional
     public void delete(UUID id, Caller caller) {
         conversations.delete(findConversation(id, caller));
-        if (caller.isGuest()) caller.guestConversationIds().remove(id);
     }
 
     public String summarize(SummaryRequest request) {
@@ -176,11 +166,8 @@ public class AssistantService {
         return findConversation(id, caller).getMessages().stream().map(m -> new Turn(m.getRole(), m.getContent())).toList();
     }
 
+    /** A conversation is only visible to the account that owns it; anything else looks like "not found". */
     private Conversation findConversation(UUID id, Caller caller) {
-        if (caller.isGuest()) {
-            if (!caller.guestConversationIds().contains(id)) throw new NotFoundException("Conversation not found");
-            return conversations.findByIdAndUserIsNull(id).orElseThrow(() -> new NotFoundException("Conversation not found"));
-        }
         return conversations.findByIdAndUser_Id(id, caller.userId()).orElseThrow(() -> new NotFoundException("Conversation not found"));
     }
 

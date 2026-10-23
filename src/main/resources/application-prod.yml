@@ -1,0 +1,25 @@
+# Production profile (activated by SPRING_PROFILES_ACTIVE=prod, which the Dockerfile sets).
+# Persistent PostgreSQL instead of the local H2 file; secure cookies; fail fast on missing configuration.
+spring:
+  datasource:
+    # Either set SEEKORA_DB_URL to a full JDBC URL, or set host/port/name and let this build it.
+    url: ${SEEKORA_DB_URL:jdbc:postgresql://${SEEKORA_DB_HOST}:${SEEKORA_DB_PORT:5432}/${SEEKORA_DB_NAME}}
+    username: ${SEEKORA_DB_USER}
+    password: ${SEEKORA_DB_PASSWORD}
+    hikari:
+      maximum-pool-size: ${SEEKORA_DB_POOL_SIZE:5}
+      connection-timeout: 20000
+  jpa:
+    hibernate:
+      # "update" only ever adds missing tables/columns/indexes; it never drops data. Do not use create/create-drop here.
+      ddl-auto: ${DDL_AUTO:update}
+server:
+  servlet:
+    session:
+      cookie:
+        secure: ${SEEKORA_COOKIE_SECURE:true}
+seekora:
+  ai:
+    # In production a missing key is reported as a clear configuration error instead of silently falling back to
+    # scraping a search engine, which usually blocks datacenter IP addresses.
+    required: ${SEEKORA_AI_REQUIRED:true}

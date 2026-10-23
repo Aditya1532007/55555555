@@ -12,7 +12,7 @@ Requirements: Java 21+, Maven 3.9+, and outbound internet access for public sear
 mvn -s maven-settings.xml spring-boot:run
 ```
 
-Open `http://localhost:8080`. Run the tests with `mvn -s maven-settings.xml test`. Health status is at `http://localhost:8080/actuator/health`. Maven caches dependencies inside `.m2repo`; conversation data is stored under `./data`.
+Open `http://localhost:8080`, then sign up (a 12+ character password) to use the search and chat; everything under `/api/` except sign-up, log-in, log-out, `/auth/me` and `/status` returns 401 without a session. Run the tests with `mvn -s maven-settings.xml test`. Health status is at `http://localhost:8080/actuator/health`. Maven caches dependencies inside `.m2repo`; conversation data is stored under `./data`.
 
 ### Build and deploy
 
@@ -29,7 +29,7 @@ The ngrok Windows agent is kept in the ignored `.tools/ngrok` folder. Add your n
 & '.\.tools\ngrok\ngrok.exe' http 8080
 ```
 
-Open the HTTPS forwarding URL printed by ngrok. Users can create accounts in the app; accounts have access only to their own saved conversations. Anyone with the URL can still create an account and use the public app.
+Open the HTTPS forwarding URL printed by ngrok. Anyone with the URL can create an account, and an account is required to ask questions. Each account sees only its own saved conversations.
 
 ## API
 
@@ -79,11 +79,11 @@ The local extractive summary recognizes a requested number of bullets or sentenc
 - `GET /api/v1/conversations/{id}`
 - `DELETE /api/v1/conversations/{id}`
 
-Conversation endpoints use the current session to scope saved conversations to the signed-in account. Without a signed-in account, they operate on anonymous conversations only.
+Every endpoint below requires a signed-in session (401 otherwise). Conversations are scoped to the signed-in account; another account's id returns 404.
 
 ### Accounts
 
-- `POST /api/v1/auth/register` with `{"name":"Your Name","email":"you@example.com","password":"at-least-12-characters"}` creates an account and signs in.
+- `POST /api/v1/auth/register` with `{"name":"Your Name","email":"you@example.com","password":"at-least-12-characters","confirmPassword":"at-least-12-characters"}` creates an account and signs in (`confirmPassword` is optional for API clients; when sent it must match).
 - `POST /api/v1/auth/login` with an email and password signs in.
 - `GET /api/v1/auth/me` returns the current account.
 - `POST /api/v1/auth/logout` ends the current session.
@@ -110,13 +110,34 @@ Passwords must contain at least 12 characters and are stored as salted PBKDF2 ha
 | `SEEKORA_AI_TEMPERATURE` | `0.2` | Leave empty to omit (some newer models reject it). |
 | `SEEKORA_AI_REQUIRED` | `false` | `true` returns a configuration error instead of the extractive fallback. |
 | `SEEKORA_COOKIE_SECURE` | `false` | Set `true` when served only over HTTPS (ngrok / reverse proxy). |
+| `SPRING_PROFILES_ACTIVE` | _(none)_ | `prod` selects PostgreSQL and secure cookies (the Dockerfile sets it). See `RENDER_SETUP.md` for all production variables. |
 | `SEEKORA_CORS_ORIGINS` | _(empty)_ | Comma-separated origins, only if the UI is hosted from a different origin. |
 
 ## Behaviour notes
 
 * Chat answers carry `answerMode` (`ai` / `extractive`), `searchStatus` (`used` / `skipped` / `unavailable`) and a plain-language `notice`. If web search is down but a model is configured, the model still answers and the notice says nothing was verified.
 * Greetings and pure writing/coding requests skip the web search; questions and "latest/news/today" style requests use it.
-* Anonymous (guest) conversations are private to the browser session that created them. Signed-in users only see their own conversations.
+* There are no guest conversations any more: sign-in is mandatory and enforced by the server. Sign-in attempts are throttled per email (10 failures / 15 min), and each account is limited to 60 questions per hour.
 * `GET /api/v1/conversations` returns summaries (no messages); fetch one conversation to get its messages.
 * The page is served with a strict Content-Security-Policy (`script-src 'self'`), so the UI uses no inline scripts or `on*=` attributes.
 * Search uses DuckDuckGo's HTML endpoint with a Wikipedia fallback. DuckDuckGo may rate-limit automated requests from some IPs; for production use a proper search API.
+
+## Deploy on Render
+
+See `RENDER_SETUP.md` (exact dashboard settings, environment variables, and first checks) and `render.yaml` (Blueprint).
+
+## Production test checklist
+
+Use a private browser window on your `https://...onrender.com` URL (allow ~1 minute if a free service was asleep).
+
+1. Logged out, ask a question in the demo box or the chat bubble: the login window opens and nothing is sent.
+2. `curl -i -X POST $URL/api/v1/chat -H 'Content-Type: application/json' -d '{"message":"hi"}'` returns `401`.
+3. Sign up with a new email and a 12+ character password; the nav bar shows "Hi, <name>".
+4. Ask "What is artificial intelligence?": an answer appears with the "Generated by <model>" note.
+5. Ask an unrelated question (for example "How do tides work?") and check it is answered.
+6. Log out: asking a question opens the login window again, and the `curl` call above still returns 401 with the old cookie.
+7. Log in with a wrong password: the generic "Email or password is incorrect." message appears.
+8. In Render, *Manual Deploy > Restart service*, then log in again with the same account: it still exists.
+9. Create a second account and confirm it does not see the first account's conversation history (`GET /api/v1/conversations`).
+10. Browser dev tools > Network: every request goes to your `onrender.com` host, none to `localhost`.
+11. To test failure handling, temporarily set a wrong `SEEKORA_AI_API_KEY`: the answer box shows "The AI provider rejected its credentials or configuration", not a blank area. Restore the key afterwards.

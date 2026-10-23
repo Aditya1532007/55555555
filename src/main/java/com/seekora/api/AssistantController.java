@@ -21,10 +21,14 @@ public class AssistantController {
     }
     @PostMapping("/chat")
     public ChatResponse chat(@Valid @RequestBody ChatRequest request, HttpServletRequest servletRequest) {
-        return service.chat(request, Caller.from(servletRequest, true));
+        UUID accountId = requireAccount(servletRequest);
+        return service.chat(request, Caller.user(accountId));
     }
     @PostMapping("/summarize")
-    public SummaryResponse summarize(@Valid @RequestBody SummaryRequest request) { return new SummaryResponse(service.summarize(request)); }
+    public SummaryResponse summarize(@Valid @RequestBody SummaryRequest request, HttpServletRequest servletRequest) {
+        requireAccount(servletRequest);
+        return new SummaryResponse(service.summarize(request));
+    }
     @PostMapping("/conversations")
     @ResponseStatus(HttpStatus.CREATED)
     public ConversationDto create(@Valid @RequestBody(required = false) CreateConversationRequest request, HttpServletRequest servletRequest) {
@@ -42,5 +46,14 @@ public class AssistantController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable UUID id, HttpServletRequest servletRequest) {
         service.delete(id, Caller.from(servletRequest, false));
+    }
+
+    private UUID requireAccount(HttpServletRequest request) {
+        UUID accountId = com.seekora.account.AccountController.currentAccountId(request);
+        if (accountId == null) {
+            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED,
+                    "Please sign in to use Seekora search.");
+        }
+        return accountId;
     }
 }
